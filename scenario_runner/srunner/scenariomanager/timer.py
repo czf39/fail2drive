@@ -194,6 +194,9 @@ class RouteTimeoutBehavior(py_trees.behaviour.Behaviour):
 
         self._start_time = None
         self._timeout_value = self.MIN_TIMEOUT
+        self._early_stop = int(os.environ.get("EARLY_STOP", 0))
+        if self._early_stop > 0:
+            self._timeout_value = min(self._timeout_value, self._early_stop)
         self.timeout = False
 
         # Route variables
@@ -249,7 +252,11 @@ class RouteTimeoutBehavior(py_trees.behaviour.Behaviour):
             self._current_index = new_index
 
         elapsed_time = GameTime.get_time() - self._start_time
-        if elapsed_time > self._timeout_value:
+        timeout_value = self._timeout_value
+        if self._early_stop > 0:
+            timeout_value = min(timeout_value, self._early_stop)
+
+        if elapsed_time > timeout_value:
             new_status = py_trees.common.Status.SUCCESS
             self.timeout = True
 

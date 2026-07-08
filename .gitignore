@@ -19,6 +19,7 @@
 logs/
 test/
 *.sif
+/f2d_carla
 
 data/1_scenario_per_route_rm_unmanageable_v5/
 data/1_scenario_per_route_v5/

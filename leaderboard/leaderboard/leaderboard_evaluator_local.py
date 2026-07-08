@@ -21,6 +21,7 @@ import os
 import sys
 import signal
 import socket
+import random
 import numpy as np
 import torch
 
@@ -48,7 +49,34 @@ sensors_to_icons = {
     'sensor.speedometer':       'carla_speedometer',
     'sensor.camera.semantic_segmentation': 'carla_camera', # for datagen
     'sensor.camera.depth':      'carla_camera', # for datagen
+    'sensor.camera.instance_segmentation': 'carla_camera',
+    'sensor.lidar.ray_cast_semantic': 'carla_lidar',
 }
+
+
+def get_weather_id(weather_conditions):
+    weather_file = os.path.join(os.environ.get("LEADERBOARD_ROOT", "leaderboard"), "data", "weather.xml")
+    if not os.path.exists(weather_file):
+        return "unknown"
+
+    from xml.etree import ElementTree as ET
+    tree = ET.parse(weather_file)
+    root = tree.getroot()
+
+    def conditions_match(weather, conditions):
+        for key, value in weather:
+            if key == "route_percentage":
+                continue
+            if str(getattr(conditions, key, None)) != value:
+                return False
+        return True
+
+    for case in root.findall("case"):
+        weather = case[0].items()
+        if conditions_match(weather, weather_conditions):
+            return list(case.items())[0][1]
+    return "unknown"
+
 
 class LeaderboardEvaluator(object):
     """
@@ -196,7 +224,7 @@ class LeaderboardEvaluator(object):
         )
         client.get_world().apply_settings(settings)
 
-        traffic_manager_port = self.find_free_port()
+        traffic_manager_port = args.traffic_manager_port
         traffic_manager = client.get_trafficmanager(traffic_manager_port)
         traffic_manager.set_synchronous_mode(True)
         traffic_manager.set_hybrid_physics_mode(True)
@@ -281,9 +309,14 @@ class LeaderboardEvaluator(object):
 
         print("\n\033[1m========= Preparing {} (repetition {}) =========\033[0m".format(config.name, config.repetition_index))
 
+        vqa_gen = int(os.environ.get("VQA_GEN", 0))
+
         # Prepare the statistics of the route
         route_name = f"{config.name}_rep{config.repetition_index}"
         self.statistics_manager.create_route_data(route_name, config.index)
+        scenario_name = config.scenario_configs[0].type if config.scenario_configs else "UnknownScenario"
+        town_name = str(config.town)
+        weather_id = get_weather_id(config.weather[0][1]) if config.weather else "unknown"
 
         print("\033[1m> Loading the world\033[0m")
 
@@ -327,20 +360,30 @@ class LeaderboardEvaluator(object):
                 self._ros1_server.start()
 
             # self.agent_instance = agent_class_obj(args.host, args.port, args.debug)
-            if int(os.environ.get('DATAGEN', 0))==1:
+            if vqa_gen:
+                self.agent_instance = agent_class_obj(args.agent_config, args.vlm_config, config.index)
+                if hasattr(self.agent_instance, "_update_privilege_info"):
+                    self.agent_instance._update_privilege_info(
+                        scenario_name, route_name, town_name, weather_id, route_date_string
+                    )
+            elif int(os.environ.get('DATAGEN', 0))==1:
                 self.agent_instance = agent_class_obj(args.agent_config, config.index)
             else:
                 self.agent_instance = agent_class_obj(args.agent_config, route_date_string)
 
             self.agent_instance.set_global_plan(self.route_scenario.gps_route, self.route_scenario.route)
-            self.agent_instance.setup(args.agent_config, route_date_string, self.traffic_manager)
+            if vqa_gen:
+                self.agent_instance.setup(args.agent_config)
+            else:
+                self.agent_instance.setup(args.agent_config, route_date_string, self.traffic_manager)
 
             # Check and store the sensors
             if not self.sensors:
                 self.sensors = self.agent_instance.sensors()
                 track = self.agent_instance.track
 
-                validate_sensor_configuration(self.sensors, track, args.track)
+                if not vqa_gen:
+                    validate_sensor_configuration(self.sensors, track, args.track)
 
                 self.sensor_icons = [sensors_to_icons[sensor['type']] for sensor in self.sensors]
                 self.statistics_manager.save_sensors(self.sensor_icons)
@@ -500,6 +543,9 @@ def main():
                         help="Path to checkpoint used for saving statistics and resuming")
     parser.add_argument("--debug-checkpoint", type=str, default='./live_results.txt',
                         help="Path to checkpoint used for saving live results")
+    parser.add_argument("--gpu-rank", type=int, default=0)
+    parser.add_argument("-f", "--vlm-config", type=str,
+                        help="Path to vlm config file", default=None)
 
     arguments = parser.parse_args()
 

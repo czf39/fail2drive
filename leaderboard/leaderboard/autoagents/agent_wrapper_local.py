@@ -43,7 +43,9 @@ SENSORS_LIMITS = {
     'sensor.opendrive_map': 1,
     'sensor.speedometer': 1,
     'sensor.camera.depth': 8, # for data generation
-    'sensor.camera.semantic_segmentation': 8 # for data generation
+    'sensor.camera.semantic_segmentation': 8, # for data generation
+    'sensor.camera.instance_segmentation': 8, # for data generation
+    'sensor.lidar.ray_cast_semantic': 2 # for data generation
 }
 ALLOWED_SENSORS = SENSORS_LIMITS.keys()
 
@@ -148,6 +150,7 @@ class AgentWrapper(object):
         type_ = sensor_spec["type"]
         id_ = sensor_spec["id"]
         attributes = {}
+        world = CarlaDataProvider.get_world()
 
         if type_ == 'sensor.opendrive_map':
             attributes['reading_frequency'] = sensor_spec['reading_frequency']
@@ -155,15 +158,21 @@ class AgentWrapper(object):
             sensor_rotation = carla.Rotation()
 
         elif type_ == 'sensor.speedometer':
-            delta_time = CarlaDataProvider.get_world().get_settings().fixed_delta_seconds
+            delta_time = world.get_settings().fixed_delta_seconds
             attributes['reading_frequency'] = 1 / delta_time
             sensor_location = carla.Location()
             sensor_rotation = carla.Rotation()
 
-        if type_.startswith('sensor.camera'):
+        elif type_ in [
+            'sensor.camera.rgb',
+            'sensor.camera.depth',
+            'sensor.camera.semantic_segmentation',
+            'sensor.camera.instance_segmentation',
+        ]:
             attributes['image_size_x'] = str(sensor_spec['width'])
             attributes['image_size_y'] = str(sensor_spec['height'])
             attributes['fov'] = str(sensor_spec['fov'])
+            attributes['role_name'] = str(sensor_spec['id'])
 
             sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
                                              z=sensor_spec['z'])
@@ -172,20 +181,32 @@ class AgentWrapper(object):
                                              yaw=sensor_spec['yaw'])
 
         elif type_ == 'sensor.lidar.ray_cast':
-            attributes['range'] = str(85)
-            if DATAGEN==1:
-                attributes['rotation_frequency'] = str(sensor_spec['rotation_frequency'])
-                attributes['points_per_second'] = str(sensor_spec['points_per_second'])
-            else:
-                attributes['rotation_frequency'] = str(10)
-                attributes['points_per_second'] = str(600000)
-            attributes['channels'] = str(64)
+            attributes['range'] = str(sensor_spec['range'])
+            attributes['rotation_frequency'] = str(sensor_spec['rotation_frequency'])
+            attributes['channels'] = str(sensor_spec['channels'])
             attributes['upper_fov'] = str(10)
             attributes['lower_fov'] = str(-30)
+            attributes['points_per_second'] = str(sensor_spec['points_per_second'])
             attributes['atmosphere_attenuation_rate'] = str(0.004)
-            attributes['dropoff_general_rate'] = str(0.45)
-            attributes['dropoff_intensity_limit'] = str(0.8)
-            attributes['dropoff_zero_intensity'] = str(0.4)
+            attributes['dropoff_general_rate'] = str(sensor_spec['dropoff_general_rate'])
+            attributes['dropoff_intensity_limit'] = str(sensor_spec['dropoff_intensity_limit'])
+            attributes['dropoff_zero_intensity'] = str(sensor_spec['dropoff_zero_intensity'])
+            attributes['role_name'] = str(sensor_spec['id'])
+
+            sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
+                                             z=sensor_spec['z'])
+            sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+                                             roll=sensor_spec['roll'],
+                                             yaw=sensor_spec['yaw'])
+
+        elif type_ == 'sensor.lidar.ray_cast_semantic':
+            attributes['range'] = str(sensor_spec['range'])
+            attributes['rotation_frequency'] = str(sensor_spec['rotation_frequency'])
+            attributes['channels'] = str(sensor_spec['channels'])
+            attributes['upper_fov'] = str(10)
+            attributes['lower_fov'] = str(-30)
+            attributes['points_per_second'] = str(sensor_spec['points_per_second'])
+            attributes['role_name'] = str(sensor_spec['id'])
 
             sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
                                              z=sensor_spec['z'])
@@ -197,7 +218,8 @@ class AgentWrapper(object):
             attributes['horizontal_fov'] = str(sensor_spec['horizontal_fov'])  # degrees
             attributes['vertical_fov'] = str(sensor_spec['vertical_fov'])  # degrees
             attributes['points_per_second'] = '1500'
-            attributes['range'] = '100'  # meters
+            attributes['range'] = sensor_spec['range']  # meters
+            attributes['role_name'] = str(sensor_spec['id'])
 
             sensor_location = carla.Location(x=sensor_spec['x'],
                                              y=sensor_spec['y'],
@@ -214,6 +236,7 @@ class AgentWrapper(object):
             attributes['noise_alt_bias'] = str(0.0)
             attributes['noise_lat_bias'] = str(0.0)
             attributes['noise_lon_bias'] = str(0.0)
+            attributes['role_name'] = str(sensor_spec['id'])
 
             sensor_location = carla.Location(x=sensor_spec['x'],
                                              y=sensor_spec['y'],
@@ -227,6 +250,7 @@ class AgentWrapper(object):
             attributes['noise_gyro_stddev_x'] = str(0.001)
             attributes['noise_gyro_stddev_y'] = str(0.001)
             attributes['noise_gyro_stddev_z'] = str(0.001)
+            attributes['role_name'] = str(sensor_spec['id'])
 
             sensor_location = carla.Location(x=sensor_spec['x'],
                                              y=sensor_spec['y'],
@@ -234,6 +258,9 @@ class AgentWrapper(object):
             sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
                                              roll=sensor_spec['roll'],
                                              yaw=sensor_spec['yaw'])
+        else:
+            raise SensorConfigurationInvalid("Unsupported sensor type: {}".format(type_))
+
         sensor_transform = carla.Transform(sensor_location, sensor_rotation)
 
         return type_, id_, sensor_transform, attributes

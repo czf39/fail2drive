@@ -35,7 +35,7 @@ class AutonomousAgent(object):
     Autonomous agent base class. All user agents have to be derived from this class
     """
 
-    def __init__(self, path_to_conf_file, route_index=None):
+    def __init__(self, path_to_conf_file, path_to_vlm_conf_file=None, route_index=None):
         self.track = Track.SENSORS
         #  current global plans to reach a destination
         self._global_plan = None
@@ -45,6 +45,20 @@ class AutonomousAgent(object):
         self.sensor_interface = SensorInterface()
 
         self.wallclock_t0 = None
+
+        self._curr_scenario_name = None
+        self._curr_route_name = None
+        self._curr_town_name = None
+        self._curr_weather_id = None
+        self._save_name = None
+        self._vlm_cfg_dir = path_to_vlm_conf_file
+
+    def _update_privilege_info(self, scenario_name, route_name, town_name, weather_id, save_name):
+        self._curr_scenario_name = scenario_name
+        self._curr_route_name = route_name
+        self._curr_town_name = town_name
+        self._curr_weather_id = weather_id
+        self._save_name = save_name
 
     def setup(self, path_to_conf_file):
         """
@@ -101,7 +115,7 @@ class AutonomousAgent(object):
         Execute the agent call, e.g. agent()
         Returns the next vehicle controls
         """
-        input_data = self.sensor_interface.get_data(GameTime.get_frame())
+        input_data = self.sensor_interface.get_data()
 
         timestamp = GameTime.get_time()
 

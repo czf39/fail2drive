@@ -142,6 +142,8 @@ class CallBack(object):
             self._parse_image_cb(data, self._tag)
         elif isinstance(data, carla.libcarla.LidarMeasurement):
             self._parse_lidar_cb(data, self._tag)
+        elif isinstance(data, carla.libcarla.SemanticLidarMeasurement):
+            self._parse_sem_lidar_cb(data, self._tag)
         elif isinstance(data, carla.libcarla.RadarMeasurement):
             self._parse_radar_cb(data, self._tag)
         elif isinstance(data, carla.libcarla.GnssMeasurement):
@@ -164,6 +166,12 @@ class CallBack(object):
         points = np.frombuffer(lidar_data.raw_data, dtype=np.dtype('f4'))
         points = copy.deepcopy(points)
         points = np.reshape(points, (int(points.shape[0] / 4), 4))
+        self._data_provider.update_sensor(tag, points, lidar_data.frame)
+
+    def _parse_sem_lidar_cb(self, lidar_data, tag):
+        points = np.frombuffer(lidar_data.raw_data, dtype=np.dtype('f4'))
+        points = copy.deepcopy(points)
+        points = np.reshape(points, (int(points.shape[0] / 3), 3))
         self._data_provider.update_sensor(tag, points, lidar_data.frame)
 
     def _parse_radar_cb(self, radar_data, tag):
@@ -198,8 +206,8 @@ class CallBack(object):
 class SensorInterface(object):
     def __init__(self):
         self._sensors_objects = {}
-        self._data_buffers = Queue()
-        self._queue_timeout = 10
+        self._new_data_buffers = Queue()
+        self._queue_timeout = 300
 
         # Only sensor that doesn't get the data on tick, needs special treatment
         self._opendrive_tag = None
@@ -217,9 +225,9 @@ class SensorInterface(object):
         if tag not in self._sensors_objects:
             raise SensorConfigurationInvalid("The sensor with tag [{}] has not been created!".format(tag))
 
-        self._data_buffers.put((tag, frame, data))
+        self._new_data_buffers.put((tag, frame, data))
 
-    def get_data(self, frame):
+    def get_data(self):
         """Read the queue to get the sensors data"""
         try:
             data_dict = {}
@@ -229,9 +237,7 @@ class SensorInterface(object):
                         and len(self._sensors_objects.keys()) == len(data_dict.keys()) + 1:
                     break
 
-                sensor_data = self._data_buffers.get(True, self._queue_timeout)
-                if sensor_data[1] != frame:
-                    continue
+                sensor_data = self._new_data_buffers.get(True, self._queue_timeout)
                 data_dict[sensor_data[0]] = ((sensor_data[1], sensor_data[2]))
 
         except Empty:

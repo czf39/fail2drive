@@ -4371,6 +4371,9 @@ class ScenarioTimeout(AtomicBehavior):
         Setup actor
         """
         super().__init__(name)
+        early_stop = int(os.environ.get("EARLY_STOP", 0))
+        if early_stop > 0:
+            duration = min(early_stop, duration)
         self._duration = duration
         self._scenario_name = scenario_name
         self._start_time = 0

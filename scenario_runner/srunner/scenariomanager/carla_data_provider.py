@@ -72,6 +72,39 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
     _grp = None
     _runtime_init_flag = False
     _lock = threading.Lock()
+    _scene_info = {}
+
+    @staticmethod
+    def set_scene_info(key, value):
+        """
+        Communicate privileged scenario information to agents.
+        """
+        with CarlaDataProvider._lock:
+            CarlaDataProvider._scene_info[key] = value
+
+    @staticmethod
+    def get_scene_info(key):
+        """
+        Get privileged scenario information for agents.
+        """
+        with CarlaDataProvider._lock:
+            return CarlaDataProvider._scene_info.get(key)
+
+    @staticmethod
+    def get_all_scene_info_keys():
+        """
+        Get all privileged scenario information keys.
+        """
+        with CarlaDataProvider._lock:
+            return CarlaDataProvider._scene_info.keys()
+
+    @staticmethod
+    def reset_scene_info():
+        """
+        Empty all privileged scenario information.
+        """
+        with CarlaDataProvider._lock:
+            CarlaDataProvider._scene_info = {}
 
     @staticmethod
     def register_actor(actor, transform=None):
@@ -858,6 +891,8 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
         """
         DestroyActor = carla.command.DestroyActor       # pylint: disable=invalid-name
         batch = []
+
+        CarlaDataProvider.reset_scene_info()
 
         for actor_id in CarlaDataProvider._carla_actor_pool.copy():
             actor = CarlaDataProvider._carla_actor_pool[actor_id]

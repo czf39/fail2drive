@@ -313,6 +313,13 @@ class RouteScenario(BasicScenario):
                 trigger_location = scenario_config.trigger_points[0].location
 
                 ego_location = CarlaDataProvider.get_location(ego_vehicle)
+
+                CarlaDataProvider.set_scene_info('scenario_status', 'WAIT')
+                CarlaDataProvider.set_scene_info('test_key', 'Still alive')
+                CarlaDataProvider.set_scene_info('scenario_name', scenario_config.type)
+                CarlaDataProvider.set_scene_info('trigger_point', trigger_location)
+                CarlaDataProvider.set_scene_info('other_info', scenario_config.other_parameters)
+
                 if ego_location is None:
                     continue
 

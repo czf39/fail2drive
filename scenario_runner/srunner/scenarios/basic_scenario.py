@@ -11,6 +11,7 @@ This module provide BasicScenario, the basic class of all the scenarios.
 
 from __future__ import print_function
 
+import os
 import operator
 import py_trees
 
@@ -335,3 +336,15 @@ class BasicScenario(object):
         Returns occupied parking slots.
         """
         return self.parking_slots
+
+    def pass_scenario_actor(self, actor, transform, label='role_actor'):
+        """
+        Share the main scenario actor with VQA-enabled agents.
+        """
+        vqa_gen = os.environ.get('VQA_GEN', 0)
+        if vqa_gen and actor is not None:
+            actor_dict = {
+                'actor': actor,
+                'transform': transform
+            }
+            CarlaDataProvider.set_scene_info(label, actor_dict)
